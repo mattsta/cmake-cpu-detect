@@ -15,7 +15,7 @@ def enumerateFeatures_(feature):
     """ Given a regex, run findall on target and complain if nothing found. """
     features = []
     found = None
-    with open(TARGET_FILE, 'r') as t:
+    with open(TARGET_FILE, "r") as t:
         tFull = t.read()
         found = re.findall(feature, tFull)
         if not found:
@@ -37,13 +37,14 @@ def enumerateCPUFeatures():
     # Line looks like:
     # PROC_WITH_FEAT(Nehalem, "nehalem", PROC_64_BIT, FEATURE_SSE4_2)
     return enumerateFeatures_(
-        "\nPROC_WITH_FEAT\((.*), \"(.*)\", PROC_64_BIT, FEATURE_(.*)\)")
+        '\nPROC_WITH_FEAT\((.*), "(.*)", PROC_64_BIT, FEATURE_(.*)\)'
+    )
 
 
 def enumerateCPUAliases():
     # Line looks like:
     # PROC_ALIAS(Nehalem, "corei7")
-    return enumerateFeatures_("\nPROC_ALIAS\((.*), \"(.*)\"\)")
+    return enumerateFeatures_('\nPROC_ALIAS\((.*), "(.*)"\)')
 
 
 # Now create multiple data structures:
@@ -65,28 +66,28 @@ def mergeCPUWithAliases(cpus, aliases, featureMap):
     cpuFeatureMap = {}
     for cpu in cpus:
         internalName, marchName, feature = cpu
-        cpuFeatureMap[marchName] = {
-            "features": featureMap[feature], "aliasFor": None}
+        cpuFeatureMap[marchName] = {"features": featureMap[feature], "aliasFor": None}
         for alias in aliases:
             aliasInternal, aliasMarch = alias
             if aliasInternal == internalName:
                 cpuFeatureMap[aliasMarch] = {
-                    "features": featureMap[feature], "aliasFor": marchName}
+                    "features": featureMap[feature],
+                    "aliasFor": marchName,
+                }
     return cpuFeatureMap
 
 
 def printCPUFeatureMap(marchFeatureMap, formatter):
-    for march, value in sorted(marchFeatureMap.items(),
-                               key=lambda x: x[1]["features"]):
-        alias = value['aliasFor']
-        features = value['features']
+    for march, value in sorted(marchFeatureMap.items(), key=lambda x: x[1]["features"]):
+        alias = value["aliasFor"]
+        features = value["features"]
         formatter(march, alias, features)
 
 
 def enumerateFeaturesByCPU(marchFeatureMap):
     featureCPUMap = collections.defaultdict(list)
     for march, value in marchFeatureMap.items():
-        features = value['features']
+        features = value["features"]
         for feature in features:
             featureCPUMap[feature].append(march)
 
@@ -94,8 +95,7 @@ def enumerateFeaturesByCPU(marchFeatureMap):
 
 
 def printFeatureCPUMap(featureMarchMap, formatter):
-    for feature, marchs in sorted(featureMarchMap.items(),
-                                  key=lambda x: x[0]):
+    for feature, marchs in sorted(featureMarchMap.items(), key=lambda x: x[0]):
         formatter(feature, marchs)
 
 
@@ -104,10 +104,8 @@ def printFeatureCPUMap(featureMarchMap, formatter):
 # - system feature knowledge (when march=[a known uarch])
 def writeCMakeHelper(featureMarchMap):
     unsetAll = []
-    for feature, marchs in sorted(featureMarchMap.items(),
-                                  key=lambda x: x[0]):
-        unsetAll.append(
-            f"    unset(${{RESULT_PREFIX}}_FEATURE_{feature} CACHE)")
+    for feature, marchs in sorted(featureMarchMap.items(), key=lambda x: x[0]):
+        unsetAll.append(f"    unset(${{RESULT_PREFIX}}_FEATURE_{feature} CACHE)")
         unsetAll.append(f"    unset(${{RESULT_PREFIX}}_{feature} CACHE)")
     unsetAll = "\n".join(unsetAll)
 
@@ -171,7 +169,10 @@ set(CMAKE_REQUIRED_FLAGS ${{BUILDING_FLAGS}})
 if (("${{BUILDING_FLAGS}}" MATCHES "march=native") OR
     (NOT "${{BUILDING_FLAGS}}" MATCHES "march=") OR
     ("${{KNOWN_BUILD_TYPE}}" STREQUAL ""))
-""".format(unsetAll))  # empty format() because we already doubled all the {{}}
+""".format(
+                unsetAll
+            )
+        )  # empty format() because we already doubled all the {{}}
 
         # In cmake, use:
         # if (CLANG_FEATURE_AVX2) ...
@@ -191,7 +192,8 @@ if (("${{BUILDING_FLAGS}}" MATCHES "march=native") OR
         #       on architecture instead of headers, we're fine using
         #       any well-known and widely available header here.
         def printCMakeDetectionCapability(feature, marchs):
-            x.write("""
+            x.write(
+                """
 check_c_source_compiles("
 #ifndef __{}__
 #error not supported
@@ -201,13 +203,26 @@ int main(void) {{
     return 0;
 }}" ${{RESULT_PREFIX}}_FEATURE_{})
 set(${{RESULT_PREFIX}}_{} ${{${{RESULT_PREFIX}}_FEATURE_{}}} PARENT_SCOPE)
-""".format(feature, feature, feature, feature, feature, feature, feature, feature))
+""".format(
+                    feature,
+                    feature,
+                    feature,
+                    feature,
+                    feature,
+                    feature,
+                    feature,
+                    feature,
+                )
+            )
 
             # Add a catch-all "AVX512 support" query
             if feature == "AVX512F":
                 x.write(
                     """set(${{RESULT_PREFIX}}_AVX512 ${{RESULT_PREFIX}}_FEATURE_{} PARENT_SCOPE)
-""".format(feature))
+""".format(
+                        feature
+                    )
+                )
 
         printFeatureCPUMap(featureMarchMap, printCMakeDetectionCapability)
 
@@ -215,30 +230,40 @@ set(${{RESULT_PREFIX}}_{} ${{${{RESULT_PREFIX}}_FEATURE_{}}} PARENT_SCOPE)
             """
 else()
 # else, use march=string to check feature capability
-""")
+"""
+        )
 
         # In cmake, use:
         # if (LIST_CLANG_FEATURE_MAP_AVX2 IN_LIST marchvalue)
         def printCMakeFeatureLists(feature, marchs):
-            x.write("""
+            x.write(
+                """
 set(CLANG_FEATURE_MAP_{} {})
 message(STATUS "Querying for ${{marchName}} {}...")
 foreach(marchName IN LISTS CLANG_FEATURE_MAP_{})
     if ("${{BUILDING_FLAGS}}" MATCHES "march=${{marchName}}")
         message(STATUS "Querying for ${{marchName}} {}... - found")
         set(${{RESULT_PREFIX}}_{} YES PARENT_SCOPE)
-""".format(feature, " ".join(marchs), feature, feature, feature, feature))
+""".format(
+                    feature, " ".join(marchs), feature, feature, feature, feature
+                )
+            )
 
             # Add a catch-all "AVX512 support" query
             if feature == "AVX512F":
                 x.write(
                     """        set(${{RESULT_PREFIX}}_AVX512 YES PARENT_SCOPE)
-""".format(feature))
+""".format(
+                        feature
+                    )
+                )
 
-            x.write("""    endif()
+            x.write(
+                """    endif()
 set(CMAKE_REQUIRED_FLAGS)
 endforeach(marchName)
-""")
+"""
+            )
 
         printFeatureCPUMap(featureMarchMap, printCMakeFeatureLists)
 
@@ -246,7 +271,8 @@ endforeach(marchName)
             """
 endif()
 endfunction()
-""")
+"""
+        )
 
 
 if __name__ == "__main__":
@@ -256,33 +282,35 @@ if __name__ == "__main__":
 
     featureTree = createFeatureTree(featuresByAge)
 
-    marchFeatureMap = mergeCPUWithAliases(cpuFeatures, cpuAliases,
-                                          featureTree)
+    marchFeatureMap = mergeCPUWithAliases(cpuFeatures, cpuAliases, featureTree)
 
     featureMarchMap = enumerateFeaturesByCPU(marchFeatureMap)
 
-#    print(featuresByAge)
-#    print(featureTree)
-#    print(cpuFeatures)
-#    print(cpuAliases)
-#    print(marchFeatureMap)
+    #    print(featuresByAge)
+    #    print(featureTree)
+    #    print(cpuFeatures)
+    #    print(cpuAliases)
+    #    print(marchFeatureMap)
 
     # Sort feature map by list of length of features
     # from shortest to longest
 
     def debugPrintCFM(march, alias, features):
         features.sort()
-        print("{}{}: ({} features)\n{}\n".
-              format(march,
-                     " (alias for {})".format(alias) if alias else "",
-                     len(features), features))
+        print(
+            "{}{}: ({} features)\n{}\n".format(
+                march,
+                " (alias for {})".format(alias) if alias else "",
+                len(features),
+                features,
+            )
+        )
 
     printCPUFeatureMap(marchFeatureMap, debugPrintCFM)
 
     def debugPrintFCM(feature, marchs):
         marchs.sort()
-        print("{}: ({} marchs)\n{}\n".
-              format(feature, len(marchs), marchs))
+        print("{}: ({} marchs)\n{}\n".format(feature, len(marchs), marchs))
 
     printFeatureCPUMap(featureMarchMap, debugPrintFCM)
 
